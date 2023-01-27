@@ -64,10 +64,6 @@ class Car_breaker:
         return cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
 
 
-    
-
-    # Actuals Functions
-
     def PressKey(self, hexKeyCode):
         extra = ctypes.c_ulong(0)
         ii_ = Input_I()
@@ -82,20 +78,21 @@ class Car_breaker:
         x = Input( ctypes.c_ulong(1), ii_ )
         ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
 
+    def set_resized_size(self, X, Y):
+        if(X > 640 and Y > 480):
+            # resizing for faster detection
+            scale_ratio = X / 640.0
+            self.resizedX = 640
+            self.resizedY = int(Y//scale_ratio)
+        else:
+            self.resizedX = X
+            self.resizedY = Y
 
     def get_image(self, pX,pY,sizeX,sizeY):
         # Capture frame-by-frame
         frame = self.grab_screen(region=(pX,pY,pX+sizeX,pY+sizeY))
-        #frame = grab_screen(region=(3840/2,1080/2,800,600))
 
-        # resizing for faster detection
-        if(sizeX > 640 and sizeY > 480):
-            scale_ratio = sizeX / 640.0
-            x = 640
-            y =  sizeY//scale_ratio
-            frame = cv2.resize(frame, (x, int(y)))
-        # using a greyscale picture, also for faster detection
-        #gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        frame = cv2.resize(frame, (self.resizedX, self.resizedY))
 
         return frame
 
@@ -108,24 +105,20 @@ class Car_breaker:
 
         return boxes
 
-    def start_detecting(self):
+    def start_detecting(self, pX, pY, sizeX, sizeY, window, video):
         # initialize the HOG descriptor/person detector
         hog = cv2.HOGDescriptor()
         hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-
+        self.set_resized_size(sizeX, sizeY)
         cv2.startWindowThread()
 
-        # the output will be written to output.avi
-        out = cv2.VideoWriter(
-            'output.avi',
-            cv2.VideoWriter_fourcc(*'MJPG'),
-            15.,
-            (640,480))
-
-        pX = (1280-400)//2
-        pY = (1024-300)//2
-        sizeX = 600
-        sizeY = 400
+        if(window):
+            # the output will be written to output.avi
+            out = cv2.VideoWriter(
+                'output.avi',
+                cv2.VideoWriter_fourcc(*'MJPG'),
+                15.,
+                (self.resizedX,self.resizedY))
 
         while(True):
             frame = self.get_image(pX,pY,sizeX,sizeY)
@@ -137,9 +130,11 @@ class Car_breaker:
             for (xA, yA, xB, yB) in boxes:
                 # display the detected boxes in the colour picture
                 if (yB - yA) < 220:
-                    cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 255, 0), 2)
+                    if(window or video):
+                        cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 255, 0), 2)
                 else:
-                    cv2.rectangle(frame, (xA, yA), (xB, yB), (255, 0, 0), 2)
+                    if(window or video):
+                        cv2.rectangle(frame, (xA, yA), (xB, yB), (255, 0, 0), 2)
                     needToBreak = True
             
             if needToBreak:
@@ -149,18 +144,22 @@ class Car_breaker:
             else:
                 self.ReleaseKey(self.SPACE)
 
-            # Write the output video 
-            out.write(frame.astype('uint8'))
-            # Display the resulting frame
-            cv2.imshow('frame',frame)
+            if(video):
+                # Write the output video 
+                out.write(frame.astype('uint8'))
+            if(window):
+                # Display the resulting frame
+                cv2.imshow('frame',frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
         # When everything done
-        # release the output
-        out.release()
-        # finally, close the window
-        cv2.destroyAllWindows()
+        if(video):
+            # release the output
+            out.release()
+        if(window):
+            # finally, close the window
+            cv2.destroyAllWindows()
         cv2.waitKey(1)
 
 
