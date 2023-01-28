@@ -3,9 +3,12 @@ import car_breaker
 
 def main(pX, pY, sizeX, sizeY, _window, _video):
     myCarBreaker = car_breaker.Car_breaker()
+
+    # default values
     window = False
     video = False
 
+    # convert parameter from commandline to boolean values
     if(_window == 'on'):
         window = True
     if(_video == 'on'):

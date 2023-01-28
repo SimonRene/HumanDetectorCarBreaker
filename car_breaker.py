@@ -79,20 +79,27 @@ class Car_breaker:
         ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
 
     def set_resized_size(self, X, Y):
+        self.resized = False
         if(X > 640 and Y > 480):
             # resizing for faster detection
             scale_ratio = X / 640.0
             self.resizedX = 640
             self.resizedY = int(Y//scale_ratio)
+            self.resized = True
         else:
             self.resizedX = X
             self.resizedY = Y
+
+        # size that defines which detected persons are in dager ( the ones which are bigger that this number )
+        self.dangerousSize = int(self.resizedY * 0.45)
 
     def get_image(self, pX,pY,sizeX,sizeY):
         # Capture frame-by-frame
         frame = self.grab_screen(region=(pX,pY,pX+sizeX,pY+sizeY))
 
-        frame = cv2.resize(frame, (self.resizedX, self.resizedY))
+        if(self.resized):
+            # resize captured frame for better performance
+            frame = cv2.resize(frame, (self.resizedX, self.resizedY))
 
         return frame
 
@@ -101,24 +108,29 @@ class Car_breaker:
         # returns the bounding boxes for the detected objects
         boxes, weights = hog.detectMultiScale(frame, winStride=(8,8) )
 
-        boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
-
         return boxes
 
     def start_detecting(self, pX, pY, sizeX, sizeY, window, video):
         # initialize the HOG descriptor/person detector
         hog = cv2.HOGDescriptor()
+        # set the linear svm
         hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+        # calculate the resized values for better performance
         self.set_resized_size(sizeX, sizeY)
-        cv2.startWindowThread()
 
         if(window):
+            #start the window thread
+            cv2.startWindowThread()
+
+        if(video):
             # the output will be written to output.avi
             out = cv2.VideoWriter(
                 'output.avi',
                 cv2.VideoWriter_fourcc(*'MJPG'),
                 15.,
                 (self.resizedX,self.resizedY))
+
+        
 
         while(True):
             frame = self.get_image(pX,pY,sizeX,sizeY)
@@ -127,18 +139,17 @@ class Car_breaker:
 
             needToBreak = False
 
-            for (xA, yA, xB, yB) in boxes:
+            for (xA, yA, width, height) in boxes:
                 # display the detected boxes in the colour picture
-                if (yB - yA) < 220:
+                if (height) < self.dangerousSize:
                     if(window or video):
-                        cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 255, 0), 2)
+                        cv2.rectangle(frame, (xA, yA), (xA+width, yA+height), (0, 255, 0), 2)
                 else:
                     if(window or video):
-                        cv2.rectangle(frame, (xA, yA), (xB, yB), (255, 0, 0), 2)
+                        cv2.rectangle(frame, (xA, yA), (xA+width, yA+height), (255, 0, 0), 2)
                     needToBreak = True
             
             if needToBreak:
-                #PressKey(32)
                 self.PressKey(self.SPACE)
                 self.ReleaseKey(self.W)
             else:
@@ -150,6 +161,7 @@ class Car_breaker:
             if(window):
                 # Display the resulting frame
                 cv2.imshow('frame',frame)
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
